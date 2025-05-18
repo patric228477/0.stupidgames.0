@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Highway Dodge</title>
+  <style>
+    body { margin: 0; background: #222; overflow: hidden; }
+    canvas { display: block; margin: 0 auto; background: #444; }
+    #overlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      background: rgba(0,0,0,0.8);
+      color: white;
+      font-family: sans-serif;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 18px;
+      margin-top: 15px;
+      background: lime;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="overlay">
+  <h1>Highway Dodge</h1>
+  <button onclick="startGame()">Play</button>
+</div>
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+canvas.width = 400;
+canvas.height = 600;
+
+let player, cars, score, running = false;
+
+function resetGame() {
+  player = { x: 180, y: 500, w: 40, h: 80, speed: 6 };
+  cars = [];
+  score = 0;
+}
+
+function drawCar(x, y, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, 40, 80);
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(x + 12, y + 10, 4, 20);
+  ctx.fillRect(x + 24, y + 10, 4, 20);
+}
+
+function spawnCar() {
+  const lane = [60, 140, 220, 300][Math.floor(Math.random() * 4)];
+  cars.push({ x: lane, y: -100, speed: Math.random() * 2 + 3 });
+}
+
+function updateGame() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Move player
+  if (keys["ArrowLeft"] && player.x > 0) player.x -= player.speed;
+  if (keys["ArrowRight"] && player.x < canvas.width - player.w) player.x += player.speed;
+
+  drawCar(player.x, player.y, "#0af");
+
+  // Update cars
+  for (let car of cars) {
+    car.y += car.speed;
+    drawCar(car.x, car.y, "#f00");
+
+    if (
+      car.x < player.x + player.w &&
+      car.x + 40 > player.x &&
+      car.y < player.y + player.h &&
+      car.y + 80 > player.y
+    ) {
+      endGame();
+      return;
+    }
+  }
+
+  // Remove off-screen cars
+  cars = cars.filter(c => c.y < canvas.height + 100);
+
+  // Score
+  score++;
+  ctx.fillStyle = "#fff";
+  ctx.font = "20px sans-serif";
+  ctx.fillText("Score: " + score, 10, 30);
+}
+
+function gameLoop() {
+  if (!running) return;
+  updateGame();
+  requestAnimationFrame(gameLoop);
+}
+
+let keys = {};
+document.addEventListener("keydown", e => keys[e.key] = true);
+document.addEventListener("keyup", e => keys[e.key] = false);
+
+function startGame() {
+  document.getElementById("overlay").style.display = "none";
+  resetGame();
+  running = true;
+  setInterval(spawnCar, 1000);
+  gameLoop();
+}
+
+function endGame() {
+  running = false;
+  document.getElementById("overlay").style.display = "flex";
+  document.querySelector("#overlay h1").textContent = "Game Over – Score: " + score;
+}
+</script>
+</body>
+</html>

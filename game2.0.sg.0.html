@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Jump Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #87CEEB;
+            font-family: Arial, sans-serif;
+        }
+        #game {
+            width: 100%;
+            height: 100vh;
+            position: relative;
+            background-color: #87CEEB;
+        }
+        #player {
+            width: 30px;
+            height: 60px;
+            background-color: #FF5733;
+            position: absolute;
+            bottom: 100px;
+            left: 50px;
+            border-radius: 5px;
+        }
+        .obstacle {
+            width: 30px;
+            height: 30px;
+            background-color: #333;
+            position: absolute;
+            border-radius: 5px;
+        }
+        .ground {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 100px;
+            background-color: #654321;
+        }
+        .cloud {
+            position: absolute;
+            background-color: white;
+            border-radius: 50px;
+        }
+        #score {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 24px;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 48px;
+            color: red;
+            font-family: Arial, sans-serif;
+            display: none;
+            text-align: center;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+        }
+        #restartBtn {
+            padding: 10px 20px;
+            font-size: 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        /* Menu Styles */
+        #menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 0;
+            text-align: center;
+            z-index: 100;
+        }
+        #gameTitle {
+            font-size: 28px;
+            margin: 0;
+            padding: 5px;
+        }
+        #helpBtn {
+            padding: 5px 15px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        #helpModal {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            z-index: 200;
+            text-align: center;
+            display: none;
+            max-width: 80%;
+        }
+        #closeHelpBtn {
+            padding: 5px 15px;
+            font-size: 16px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game">
+        <div id="menu">
+            <h1 id="gameTitle">Jump Game</h1>
+            <button id="helpBtn">Help</button>
+        </div>
+        <div id="helpModal">
+            <h2>How to Play</h2>
+            <p>- Press SPACE or UP ARROW to jump</p>
+            <p>- Click or tap the screen to jump</p>
+            <p>- Avoid obstacles coming from the right</p>
+            <p>- Score increases the longer you survive</p>
+            <p>- Game gets faster over time</p>
+            <button id="closeHelpBtn">Close</button>
+        </div>
+        <div id="player"></div>
+        <div class="ground"></div>
+        <div id="score">Score: 0</div>
+        <div id="gameOver">
+            Game Over!
+            <br>
+            <button id="restartBtn">Restart</button>
+        </div>
+    </div>
+
+    <script>
+        // Game variables
+        let player = document.getElementById('player');
+        let game = document.getElementById('game');
+        let scoreElement = document.getElementById('score');
+        let gameOverElement = document.getElementById('gameOver');
+        let restartBtn = document.getElementById('restartBtn');
+        let helpBtn = document.getElementById('helpBtn');
+        let helpModal = document.getElementById('helpModal');
+        let closeHelpBtn = document.getElementById('closeHelpBtn');
+        
+        let isJumping = false;
+        let gravity = 0.9;
+        let jumpPower = 15;
+        let playerVelocity = 0;
+        let score = 0;
+        let gameSpeed = 5;
+        let gameRunning = true;
+        let obstacles = [];
+        let clouds = [];
+        let lastObstacleTime = 0;
+        let obstacleInterval = 1500; // milliseconds
+
+        // Create initial clouds
+        createClouds();
+        
+        // Game loop
+        function gameLoop() {
+            if (!gameRunning) return;
+            
+            // Handle jumping physics
+            if (isJumping) {
+                playerVelocity += gravity;
+                let newBottom = parseInt(window.getComputedStyle(player).bottom) - playerVelocity;
+                
+                if (newBottom <= 100) {
+                    newBottom = 100;
+                    isJumping = false;
+                    playerVelocity = 0;
+                }
+                
+                player.style.bottom = newBottom + 'px';
+            }
+            
+            // Move and create obstacles
+            const currentTime = Date.now();
+            if (currentTime - lastObstacleTime > obstacleInterval) {
+                createObstacle();
+                lastObstacleTime = currentTime;
+                // Increase game difficulty over time
+                obstacleInterval = Math.max(500, obstacleInterval - 50);
+                gameSpeed = Math.min(12, gameSpeed + 0.2);
+            }
+            
+            moveObstacles();
+            moveClouds();
+            checkCollisions();
+            
+            // Update score
+            score++;
+            scoreElement.innerText = 'Score: ' + score;
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Start the game loop
+        requestAnimationFrame(gameLoop);
+        
+        // Create obstacle
+        function createObstacle() {
+            const obstacle = document.createElement('div');
+            obstacle.classList.add('obstacle');
+            
+            // Random height for obstacles
+            const height = Math.floor(Math.random() * 30) + 20;
+            obstacle.style.height = height + 'px';
+            
+            // Position at the right edge of the screen
+            obstacle.style.left = game.offsetWidth + 'px';
+            obstacle.style.bottom = '100px'; // On the ground
+            
+            game.appendChild(obstacle);
+            obstacles.push(obstacle);
+        }
+        
+        // Create clouds
+        function createClouds() {
+            for (let i = 0; i < 5; i++) {
+                const cloud = document.createElement('div');
+                cloud.classList.add('cloud');
+                
+                // Random size for clouds
+                const size = Math.floor(Math.random() * 50) + 50;
+                cloud.style.width = size + 'px';
+                cloud.style.height = size / 2 + 'px';
+                
+                // Random position
+                cloud.style.left = Math.floor(Math.random() * game.offsetWidth) + 'px';
+                cloud.style.top = Math.floor(Math.random() * 200) + 'px';
+                
+                game.appendChild(cloud);
+                clouds.push(cloud);
+            }
+        }
+        
+        // Move obstacles
+        function moveObstacles() {
+            for (let i = 0; i < obstacles.length; i++) {
+                const obstacle = obstacles[i];
+                const obstacleLeft = parseInt(window.getComputedStyle(obstacle).left);
+                
+                if (obstacleLeft < -50) {
+                    // Remove obstacle if it's off-screen
+                    obstacle.remove();
+                    obstacles.splice(i, 1);
+                    i--;
+                } else {
+                    // Move obstacle to the left
+                    obstacle.style.left = (obstacleLeft - gameSpeed) + 'px';
+                }
+            }
+        }
+        
+        // Move clouds
+        function moveClouds() {
+            for (let i = 0; i < clouds.length; i++) {
+                const cloud = clouds[i];
+                const cloudLeft = parseInt(window.getComputedStyle(cloud).left);
+                
+                if (cloudLeft < -100) {
+                    // Reset cloud position if it's off-screen
+                    cloud.style.left = game.offsetWidth + 'px';
+                    cloud.style.top = Math.floor(Math.random() * 200) + 'px';
+                } else {
+                    // Move cloud to the left (slower than obstacles)
+                    cloud.style.left = (cloudLeft - gameSpeed / 2) + 'px';
+                }
+            }
+        }
+        
+        // Check for collisions
+        function checkCollisions() {
+            const playerRect = player.getBoundingClientRect();
+            
+            for (let i = 0; i < obstacles.length; i++) {
+                const obstacleRect = obstacles[i].getBoundingClientRect();
+                
+                if (
+                    playerRect.right > obstacleRect.left &&
+                    playerRect.left < obstacleRect.right &&
+                    playerRect.bottom > obstacleRect.top &&
+                    playerRect.top < obstacleRect.bottom
+                ) {
+                    // Collision detected, game over
+                    gameOver();
+                    return;
+                }
+            }
+        }
+        
+        // Game over
+        function gameOver() {
+            gameRunning = false;
+            gameOverElement.style.display = 'block';
+        }
+        
+        // Jump function
+        function jump() {
+            if (!isJumping && gameRunning) {
+                isJumping = true;
+                playerVelocity = -jumpPower;
+            }
+        }
+        
+        // Restart game
+        function restartGame() {
+            // Clear obstacles
+            for (let i = 0; i < obstacles.length; i++) {
+                obstacles[i].remove();
+            }
+            obstacles = [];
+            
+            // Reset game variables
+            score = 0;
+            gameSpeed = 5;
+            obstacleInterval = 1500;
+            lastObstacleTime = 0;
+            isJumping = false;
+            playerVelocity = 0;
+            
+            // Reset player position
+            player.style.bottom = '100px';
+            
+            // Hide game over screen
+            gameOverElement.style.display = 'none';
+            
+            // Start game
+            gameRunning = true;
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Show help modal
+        function showHelp() {
+            helpModal.style.display = 'block';
+            gameRunning = false; // Pause the game while help is shown
+        }
+        
+        // Close help modal
+        function closeHelp() {
+            helpModal.style.display = 'none';
+            gameRunning = true; // Resume the game
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Event listeners
+        document.addEventListener('keydown', function(event) {
+            if (event.code === 'Space' || event.code === 'ArrowUp') {
+                jump();
+                event.preventDefault(); // Prevent page scrolling
+            }
+        });
+        
+        document.addEventListener('touchstart', function(event) {
+            // Don't jump if touching the help button
+            if (event.target !== helpBtn && event.target !== closeHelpBtn) {
+                jump();
+                event.preventDefault(); // Prevent page scrolling
+            }
+        });
+        
+        restartBtn.addEventListener('click', restartGame);
+        helpBtn.addEventListener('click', showHelp);
+        closeHelpBtn.addEventListener('click', closeHelp);
+        
+        // Add click/tap to jump for mobile
+        game.addEventListener('click', function(event) {
+            // Don't jump if clicking the help button or in the help modal
+            if (event.target !== helpBtn && !helpModal.contains(event.target) && event.target !== restartBtn) {
+                jump();
+            }
+        });
+    </script>
+</body>
+</html>

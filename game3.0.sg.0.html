@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>3D Maze Game</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: black; }
+    canvas { display: block; }
+    #menu {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.8); display: flex; flex-direction: column;
+      align-items: center; justify-content: center; z-index: 2;
+    }
+    #menu h1 { font-size: 48px; margin-bottom: 40px; color: white; }
+    #menu button {
+      padding: 10px 20px; margin: 10px; font-size: 20px;
+      background: #222; border: 2px solid #fff; color: white; cursor: pointer;
+    }
+    #menu button:hover {
+      background: #444;
+    }
+    #menu p {
+      color: white; font-size: 20px; max-width: 300px; text-align: center;
+    }
+  </style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="menu">
+  <h1>3D Maze Game</h1>
+  <button onclick="startGame()">Play</button>
+  <button onclick="showHelp()">Help</button>
+  <p id="helpText" style="display:none;">Use W/A/S/D to move the player and find the exit in the maze. Once you find the exit, a new maze will be generated!</p>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+const TILE_SIZE = 64;
+const MAP_WIDTH = 15;
+const MAP_HEIGHT = 11;
+const FOV = Math.PI / 3;
+const RAYS = canvas.width;
+const MAX_DEPTH = 1000;
+
+let map = [];
+let exit = { x: 0, y: 0 };
+
+// Player
+let player = {
+  x: 1 * TILE_SIZE + TILE_SIZE / 2,
+  y: 1 * TILE_SIZE + TILE_SIZE / 2,
+  angle: 0,
+  speed: 3
+};
+
+let keys = {};
+document.addEventListener("keydown", e => keys[e.key] = true);
+document.addEventListener("keyup", e => keys[e.key] = false);
+
+function generateMaze(width, height) {
+  // Fill with walls
+  let maze = Array.from({ length: height }, () => Array(width).fill("#"));
+
+  function carve(x, y) {
+    const dirs = [
+      [0, -2], [2, 0], [0, 2], [-2, 0]
+    ].sort(() => Math.random() - 0.5);
+
+    for (let [dx, dy] of dirs) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx > 0 && ny > 0 && nx < width - 1 && ny < height - 1 && maze[ny][nx] === "#") {
+        maze[ny][nx] = ".";
+        maze[y + dy / 2][x + dx / 2] = ".";
+        carve(nx, ny);
+      }
+    }
+  }
+
+  maze[1][1] = ".";
+  carve(1, 1);
+
+  // Set exit
+  let ex = width - 2, ey = height - 2;
+  maze[ey][ex] = "E";
+  exit = { x: ex * TILE_SIZE + TILE_SIZE / 2, y: ey * TILE_SIZE + TILE_SIZE / 2 };
+
+  return maze;
+}
+
+function getTile(x, y) {
+  const tx = Math.floor(x / TILE_SIZE);
+  const ty = Math.floor(y / TILE_SIZE);
+  return map[ty]?.[tx] || "#";
+}
+
+function updatePlayer() {
+  let dx = 0, dy = 0;
+  if (keys["w"]) {
+    dx += Math.cos(player.angle) * player.speed;
+    dy += Math.sin(player.angle) * player.speed;
+  }
+  if (keys["s"]) {
+    dx -= Math.cos(player.angle) * player.speed;
+    dy -= Math.sin(player.angle) * player.speed;
+  }
+  if (keys["a"]) player.angle -= 0.05;
+  if (keys["d"]) player.angle += 0.05;
+
+  let newX = player.x + dx;
+  let newY = player.y + dy;
+  if (getTile(newX, player.y) !== "#") player.x = newX;
+  if (getTile(player.x, newY) !== "#") player.y = newY;
+
+  // Check if player reaches the exit
+  if (Math.hypot(player.x - exit.x, player.y - exit.y) < 20) {
+    generateNewMaze(); // Regenerate the maze after reaching the exit
+  }
+}
+
+function castRays() {
+  for (let i = 0; i < RAYS; i++) {
+    const rayAngle = player.angle - FOV / 2 + (i / RAYS) * FOV;
+    let dist = 0;
+    let hit = false;
+    let x = player.x;
+    let y = player.y;
+    const sin = Math.sin(rayAngle);
+    const cos = Math.cos(rayAngle);
+
+    while (!hit && dist < MAX_DEPTH) {
+      x += cos;
+      y += sin;
+      dist++;
+      let tx = Math.floor(x / TILE_SIZE);
+      let ty = Math.floor(y / TILE_SIZE);
+      const tile = map[ty]?.[tx];
+      if (tile === "#" || tile === "E") hit = true;
+    }
+
+    const corrected = dist * Math.cos(rayAngle - player.angle);
+    const height = (TILE_SIZE * 300) / corrected;
+    const shade = Math.max(0, 255 - corrected / 2);
+
+    let tx = Math.floor(x / TILE_SIZE);
+    let ty = Math.floor(y / TILE_SIZE);
+    const tile = map[ty]?.[tx];
+
+    if (tile === "E") {
+      ctx.fillStyle = "gold";
+    } else {
+      ctx.fillStyle = `rgb(${shade},${shade},${shade})`;
+    }
+    ctx.fillRect(i, canvas.height / 2 - height / 2, 1, height);
+  }
+}
+
+function drawSkyFloor() {
+  ctx.fillStyle = "#333";
+  ctx.fillRect(0, 0, canvas.width, canvas.height / 2);
+  ctx.fillStyle = "#111";
+  ctx.fillRect(0, canvas.height / 2, canvas.width, canvas.height / 2);
+}
+
+function gameLoop() {
+  updatePlayer();
+  drawSkyFloor();
+  castRays();
+  requestAnimationFrame(gameLoop);
+}
+
+function generateNewMaze() {
+  map = generateMaze(MAP_WIDTH, MAP_HEIGHT);
+  player.x = 1 * TILE_SIZE + TILE_SIZE / 2;
+  player.y = 1 * TILE_SIZE + TILE_SIZE / 2;
+}
+
+function startGame() {
+  document.getElementById("menu").style.display = "none";
+  generateNewMaze();
+  gameLoop();
+}
+
+function showHelp() {
+  const helpText = document.getElementById("helpText");
+  helpText.style.display = helpText.style.display === "none" ? "block" : "none";
+}
+
+generateNewMaze();
+</script>
+</body>
+</html>
